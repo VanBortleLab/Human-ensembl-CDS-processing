@@ -1,0 +1,92 @@
+---
+title: "MCB290: Codon Frequency Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Section 1. Retrieve Coding Sequence Information (Annotation)
+
+```{r codon-table}
+codon_table <- c(
+  TTT="Phe", TTC="Phe", TTA="Leu", TTG="Leu",
+  CTT="Leu", CTC="Leu", CTA="Leu", CTG="Leu",
+  ATT="Ile", ATC="Ile", ATA="Ile", ATG="Met",
+  GTT="Val", GTC="Val", GTA="Val", GTG="Val",
+
+  TCT="Ser", TCC="Ser", TCA="Ser", TCG="Ser",
+  CCT="Pro", CCC="Pro", CCA="Pro", CCG="Pro",
+  ACT="Thr", ACC="Thr", ACA="Thr", ACG="Thr",
+  GCT="Ala", GCC="Ala", GCA="Ala", GCG="Ala",
+
+  TAT="Tyr", TAC="Tyr", TAA="Stop", TAG="Stop",
+  CAT="His", CAC="His", CAA="Gln", CAG="Gln",
+  AAT="Asn", AAC="Asn", AAA="Lys", AAG="Lys",
+  GAT="Asp", GAC="Asp", GAA="Glu", GAG="Glu",
+
+  TGT="Cys", TGC="Cys", TGA="Stop", TGG="Trp",
+  CGT="Arg", CGC="Arg", CGA="Arg", CGG="Arg",
+  AGT="Ser", AGC="Ser", AGA="Arg", AGG="Arg",
+  GGT="Gly", GGC="Gly", GGA="Gly", GGG="Gly"
+)
+```
+
+### Convert the FASTA file into an RDS file
+
+This chunk reads the FASTA file with Biostrings and turns it into an RDS file.
+If the RDS file already exists, it just loads it so the (slow) conversion
+doesn't re-run every time you knit.
+
+```{r fasta-to-rds}
+library(Biostrings)
+library(stringr)
+
+fasta_path <- "Homo_sapiens.GRCh38.cds.all.fa"
+rds_path   <- "Homo_sapiens_GRCh38_cds.rds"
+
+if (!file.exists(rds_path)) {
+
+  # Read the FASTA file
+  fasta <- readDNAStringSet(fasta_path)
+
+  headers  <- names(fasta)          # full header line for each record, minus ">"
+  cds_seqs <- as.character(fasta)   # full CDS sequence for each record, as a string
+
+  # Parse the header fields
+
+  # TranscriptID.TranscriptIDv is always the first whitespace delimited token
+  transcript_full <- str_extract(headers, "^\\S+")
+  TranscriptID    <- str_split_fixed(transcript_full, "\\.", 2)[, 1]  # base ID only
+  TranscriptIDv   <- transcript_full                                  # full ID.version
+
+  # gene:GeneID.GeneIDv
+  gene_full <- str_remove(str_extract(headers, "gene:\\S+"), "^gene:")
+  GeneID    <- str_split_fixed(gene_full, "\\.", 2)[, 1]  # base ID only
+  GeneIDv   <- gene_full                                  # full ID.version
+
+  # gene_symbol:GeneName
+  gene_name <- str_remove(str_extract(headers, "gene_symbol:\\S+"), "^gene_symbol:")
+
+  # Make the data frame
+  cds <- data.frame(
+    GeneName      = gene_name,
+    GeneID        = GeneID,
+    GeneIDv       = GeneIDv,
+    TranscriptID  = TranscriptID,
+    TranscriptIDv = TranscriptIDv,
+    CDS           = cds_seqs,
+    stringsAsFactors = FALSE
+  )
+
+  cat("Rows parsed:", nrow(cds), "\n")
+  cat("Records missing GeneName:", sum(is.na(cds$GeneName)), "\n")
+
+  # save as the RDS file
+  saveRDS(cds, rds_path)
+
+} else {
+  cds <- readRDS(rds_path)
+}
+```
